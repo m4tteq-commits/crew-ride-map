@@ -29,6 +29,7 @@ export default function Drive() {
   const [isDriving, setIsDriving] = useState(false);
   const [followSelf, setFollowSelf] = useState(true);
   const [destDialogOpen, setDestDialogOpen] = useState(false);
+  const [routes, setRoutes] = useState<RouteInfo[]>([]);
   const mapRef = useRef<mapboxgl.Map | null>(null);
 
   const room = useRoom(roomId);
