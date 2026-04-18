@@ -27,7 +27,13 @@ export default function Drive() {
   const [memberId, setMemberId] = useState<string | null>(null);
   const [isDriving, setIsDriving] = useState(false);
   const [followSelf, setFollowSelf] = useState(true);
+  const [destDialogOpen, setDestDialogOpen] = useState(false);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+
+  const room = useRoom(roomId);
+  const destination = room?.dest_lat != null && room?.dest_lng != null
+    ? { lat: room.dest_lat, lng: room.dest_lng, label: room.dest_label }
+    : null;
 
   // Trip recording state
   const tripIdRef = useRef<string | null>(null);
