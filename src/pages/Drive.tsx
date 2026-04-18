@@ -328,10 +328,12 @@ export default function Drive() {
               <p className="text-center text-sm text-muted-foreground">Niciun membru încă</p>
             )}
             {sortedMembers.map((m) => {
-              const dist = distanceToDest(m);
+              const route = routes.find((r) => r.memberId === m.id);
+              const dist = route ? route.distanceM : distanceToDest(m);
+              const eta = route?.durationS;
               return (
                 <div key={m.id} className="flex items-center justify-between gap-3 rounded-lg bg-secondary/40 px-3 py-2">
-                  <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
                     <span
                       className="h-3 w-3 shrink-0 rounded-full"
                       style={{ backgroundColor: m.color, opacity: m.is_driving ? 1 : 0.4 }}
@@ -342,6 +344,11 @@ export default function Drive() {
                     {dist != null && (
                       <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
                         {formatDistance(dist)}
+                      </span>
+                    )}
+                    {eta != null && (
+                      <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-accent-foreground">
+                        ETA {formatEta(eta)}
                       </span>
                     )}
                   </div>
