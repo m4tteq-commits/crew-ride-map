@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, Crosshair, Users, Play, Square, Copy, MapPin, Flag } from "lucide-react";
 import { toast } from "sonner";
-import { haversineMeters, formatDistance } from "@/lib/geo";
+import { haversineMeters, formatDistance, formatEta } from "@/lib/geo";
+import type { RouteInfo } from "@/components/LiveMap";
 import mapboxgl from "mapbox-gl";
 
 export default function Drive() {
