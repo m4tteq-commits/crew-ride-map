@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.274101469e854aed81e192071c45bfd6',
+  appId: 'com.matteq.crewridemap',
   appName: 'Drive Together',
   webDir: 'dist',
   server: {
