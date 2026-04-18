@@ -207,6 +207,38 @@ export default function Drive() {
     toast.success("Cod copiat");
   };
 
+  const setDestination = async (lat: number, lng: number, label: string) => {
+    if (!roomId) return;
+    const { error } = await supabase.from("rooms").update({
+      dest_lat: lat,
+      dest_lng: lng,
+      dest_label: label,
+      dest_set_by: profile.nickname,
+      dest_updated_at: new Date().toISOString(),
+    }).eq("id", roomId);
+    if (error) toast.error("Nu s-a putut salva destinația");
+    else toast.success("Destinație setată");
+  };
+
+  const clearDestination = async () => {
+    if (!roomId) return;
+    await supabase.from("rooms").update({
+      dest_lat: null, dest_lng: null, dest_label: null,
+      dest_set_by: null, dest_updated_at: new Date().toISOString(),
+    }).eq("id", roomId);
+    toast.success("Destinație ștearsă");
+  };
+
+  const handleLongPress = useCallback((lat: number, lng: number) => {
+    setDestination(lat, lng, `Punct (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, profile.nickname]);
+
+  const distanceToDest = (m: typeof members[number]) => {
+    if (!destination || m.lat == null || m.lng == null) return null;
+    return haversineMeters(m.lat, m.lng, destination.lat, destination.lng);
+  };
+
   if (!token) return <MapboxTokenPrompt onSaved={() => setToken(getMapboxToken())} />;
 
   return (
@@ -216,7 +248,9 @@ export default function Drive() {
         members={members}
         selfDeviceId={deviceId}
         followSelf={followSelf}
+        destination={destination}
         onMapReady={(m) => { mapRef.current = m; }}
+        onLongPress={handleLongPress}
       />
 
       {/* Top bar */}
