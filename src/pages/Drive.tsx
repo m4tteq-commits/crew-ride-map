@@ -253,21 +253,15 @@ export default function Drive() {
         destination={destination}
         onMapReady={(m) => { mapRef.current = m; }}
         onLongPress={handleLongPress}
+        onRoutesUpdate={setRoutes}
       />
 
       {/* Top bar */}
       <div className="pointer-events-none absolute inset-x-0 top-0 safe-top">
-        <div className="pointer-events-auto flex items-center justify-between gap-2 p-3">
+        <div className="pointer-events-auto flex items-start justify-between gap-2 p-3">
           <Button size="icon" variant="secondary" onClick={() => navigate("/rooms")} className="rounded-full shadow-card">
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <button
-            onClick={copyCode}
-            className="flex items-center gap-2 rounded-full bg-card/90 px-4 py-2 text-sm font-semibold shadow-card backdrop-blur"
-          >
-            <span className="font-mono">{code}</span>
-            <Copy className="h-3.5 w-3.5 opacity-60" />
-          </button>
           <div className="flex flex-col gap-2">
             <Button size="icon" variant="secondary" onClick={centerSelf} className="rounded-full shadow-card">
               <Crosshair className="h-4 w-4" />
@@ -287,13 +281,6 @@ export default function Drive() {
           </div>
         </div>
       </div>
-
-      {/* Self speed (huge) */}
-      {isDriving && (
-        <div className="pointer-events-none absolute left-1/2 top-20 -translate-x-1/2 rounded-2xl bg-card/90 px-6 py-3 shadow-card backdrop-blur">
-          <SpeedBadge kmh={me?.speed_kmh ?? 0} size="xl" />
-        </div>
-      )}
 
       {/* Bottom card */}
       <div className="absolute inset-x-0 bottom-0 safe-bottom">
