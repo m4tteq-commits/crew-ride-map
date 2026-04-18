@@ -71,16 +71,31 @@ export type Database = {
         Row: {
           code: string
           created_at: string
+          dest_label: string | null
+          dest_lat: number | null
+          dest_lng: number | null
+          dest_set_by: string | null
+          dest_updated_at: string | null
           id: string
         }
         Insert: {
           code: string
           created_at?: string
+          dest_label?: string | null
+          dest_lat?: number | null
+          dest_lng?: number | null
+          dest_set_by?: string | null
+          dest_updated_at?: string | null
           id?: string
         }
         Update: {
           code?: string
           created_at?: string
+          dest_label?: string | null
+          dest_lat?: number | null
+          dest_lng?: number | null
+          dest_set_by?: string | null
+          dest_updated_at?: string | null
           id?: string
         }
         Relationships: []

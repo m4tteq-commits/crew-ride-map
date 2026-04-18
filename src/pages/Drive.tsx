@@ -4,14 +4,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId, getMapboxToken, getProfile } from "@/lib/device";
 import { useGeolocation, GeoSample } from "@/hooks/useGeolocation";
 import { useRoomMembers } from "@/hooks/useRoomMembers";
+import { useRoom } from "@/hooks/useRoom";
 import { LiveMap } from "@/components/LiveMap";
 import { MapboxTokenPrompt } from "@/components/MapboxTokenPrompt";
 import { SpeedBadge } from "@/components/SpeedBadge";
+import { DestinationDialog } from "@/components/DestinationDialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Crosshair, Users, Play, Square, Copy } from "lucide-react";
+import { ArrowLeft, Crosshair, Users, Play, Square, Copy, MapPin, Flag } from "lucide-react";
 import { toast } from "sonner";
-import { haversineMeters } from "@/lib/geo";
+import { haversineMeters, formatDistance } from "@/lib/geo";
 import mapboxgl from "mapbox-gl";
 
 export default function Drive() {
@@ -25,7 +27,13 @@ export default function Drive() {
   const [memberId, setMemberId] = useState<string | null>(null);
   const [isDriving, setIsDriving] = useState(false);
   const [followSelf, setFollowSelf] = useState(true);
+  const [destDialogOpen, setDestDialogOpen] = useState(false);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+
+  const room = useRoom(roomId);
+  const destination = room?.dest_lat != null && room?.dest_lng != null
+    ? { lat: room.dest_lat, lng: room.dest_lng, label: room.dest_label }
+    : null;
 
   // Trip recording state
   const tripIdRef = useRef<string | null>(null);
@@ -199,6 +207,38 @@ export default function Drive() {
     toast.success("Cod copiat");
   };
 
+  const setDestination = async (lat: number, lng: number, label: string) => {
+    if (!roomId) return;
+    const { error } = await supabase.from("rooms").update({
+      dest_lat: lat,
+      dest_lng: lng,
+      dest_label: label,
+      dest_set_by: profile.nickname,
+      dest_updated_at: new Date().toISOString(),
+    }).eq("id", roomId);
+    if (error) toast.error("Nu s-a putut salva destinația");
+    else toast.success("Destinație setată");
+  };
+
+  const clearDestination = async () => {
+    if (!roomId) return;
+    await supabase.from("rooms").update({
+      dest_lat: null, dest_lng: null, dest_label: null,
+      dest_set_by: null, dest_updated_at: new Date().toISOString(),
+    }).eq("id", roomId);
+    toast.success("Destinație ștearsă");
+  };
+
+  const handleLongPress = useCallback((lat: number, lng: number) => {
+    setDestination(lat, lng, `Punct (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, profile.nickname]);
+
+  const distanceToDest = (m: typeof members[number]) => {
+    if (!destination || m.lat == null || m.lng == null) return null;
+    return haversineMeters(m.lat, m.lng, destination.lat, destination.lng);
+  };
+
   if (!token) return <MapboxTokenPrompt onSaved={() => setToken(getMapboxToken())} />;
 
   return (
@@ -208,7 +248,9 @@ export default function Drive() {
         members={members}
         selfDeviceId={deviceId}
         followSelf={followSelf}
+        destination={destination}
         onMapReady={(m) => { mapRef.current = m; }}
+        onLongPress={handleLongPress}
       />
 
       {/* Top bar */}
@@ -230,6 +272,15 @@ export default function Drive() {
             </Button>
             <Button size="icon" variant="secondary" onClick={fitAll} className="rounded-full shadow-card">
               <Users className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant={destination ? "default" : "secondary"}
+              onClick={() => setDestDialogOpen(true)}
+              className="rounded-full shadow-card"
+              aria-label="Setează destinația"
+            >
+              <Flag className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -261,30 +312,58 @@ export default function Drive() {
             )}
           </div>
 
+          {destination && (
+            <button
+              onClick={() => setDestDialogOpen(true)}
+              className="mb-3 flex w-full items-center gap-2 rounded-lg bg-primary/15 px-3 py-2 text-left text-sm"
+            >
+              <MapPin className="h-4 w-4 shrink-0 text-primary" />
+              <span className="truncate">
+                <span className="font-semibold">Destinație:</span>{" "}
+                <span className="text-muted-foreground">{destination.label ?? "Punct ales"}</span>
+              </span>
+            </button>
+          )}
+
           <div className="max-h-32 space-y-2 overflow-y-auto">
             {sortedMembers.length === 0 && (
               <p className="text-center text-sm text-muted-foreground">Niciun membru încă</p>
             )}
-            {sortedMembers.map((m) => (
-              <div key={m.id} className="flex items-center justify-between gap-3 rounded-lg bg-secondary/40 px-3 py-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span
-                    className="h-3 w-3 shrink-0 rounded-full"
-                    style={{
-                      backgroundColor: m.color,
-                      opacity: m.is_driving ? 1 : 0.4,
-                    }}
-                  />
-                  <span className="truncate text-sm font-medium">
-                    {m.nickname}{m.device_id === deviceId ? " (tu)" : ""}
-                  </span>
+            {sortedMembers.map((m) => {
+              const dist = distanceToDest(m);
+              return (
+                <div key={m.id} className="flex items-center justify-between gap-3 rounded-lg bg-secondary/40 px-3 py-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="h-3 w-3 shrink-0 rounded-full"
+                      style={{ backgroundColor: m.color, opacity: m.is_driving ? 1 : 0.4 }}
+                    />
+                    <span className="truncate text-sm font-medium">
+                      {m.nickname}{m.device_id === deviceId ? " (tu)" : ""}
+                    </span>
+                    {dist != null && (
+                      <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                        {formatDistance(dist)}
+                      </span>
+                    )}
+                  </div>
+                  <SpeedBadge kmh={m.speed_kmh ?? 0} size="sm" />
                 </div>
-                <SpeedBadge kmh={m.speed_kmh ?? 0} size="sm" />
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       </div>
+
+      <DestinationDialog
+        open={destDialogOpen}
+        onOpenChange={setDestDialogOpen}
+        token={token}
+        proximity={me?.lat != null && me?.lng != null ? { lat: me.lat, lng: me.lng } : null}
+        currentLabel={destination?.label}
+        onPick={(lat, lng, label) => setDestination(lat, lng, label)}
+        onClear={clearDestination}
+      />
     </div>
   );
 }

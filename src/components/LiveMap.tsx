@@ -3,41 +3,100 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Member } from "@/hooks/useRoomMembers";
 
+interface Destination {
+  lat: number;
+  lng: number;
+  label?: string | null;
+}
+
 interface Props {
   token: string;
   members: Member[];
   selfDeviceId: string;
   followSelf: boolean;
+  destination?: Destination | null;
   onMapReady?: (map: mapboxgl.Map) => void;
+  onLongPress?: (lat: number, lng: number) => void;
 }
 
-export function LiveMap({ token, members, selfDeviceId, followSelf, onMapReady }: Props) {
+export function LiveMap({ token, members, selfDeviceId, followSelf, destination, onMapReady, onLongPress }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Record<string, mapboxgl.Marker>>({});
+  const destMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const onLongPressRef = useRef(onLongPress);
+  onLongPressRef.current = onLongPress;
 
+  // Init map
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     mapboxgl.accessToken = token;
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: "mapbox://styles/mapbox/dark-v11",
-      center: [26.1025, 44.4268], // Bucharest default
+      center: [26.1025, 44.4268],
       zoom: 12,
       attributionControl: false,
     });
     mapRef.current = map;
-    map.on("load", () => onMapReady?.(map));
+
+    map.on("load", () => {
+      // Routes source/layer
+      map.addSource("routes", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "routes-line",
+        type: "line",
+        source: "routes",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 4,
+          "line-opacity": 0.85,
+        },
+      });
+      onMapReady?.(map);
+    });
+
+    // Long-press detection (touch + mouse)
+    let pressTimer: number | null = null;
+    let pressLngLat: mapboxgl.LngLat | null = null;
+    let moved = false;
+    const startPress = (lngLat: mapboxgl.LngLat) => {
+      moved = false;
+      pressLngLat = lngLat;
+      pressTimer = window.setTimeout(() => {
+        if (!moved && pressLngLat && onLongPressRef.current) {
+          onLongPressRef.current(pressLngLat.lat, pressLngLat.lng);
+        }
+      }, 600);
+    };
+    const cancelPress = () => {
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    };
+    map.on("mousedown", (e) => startPress(e.lngLat));
+    map.on("touchstart", (e) => startPress(e.lngLat));
+    map.on("mousemove", () => { moved = true; cancelPress(); });
+    map.on("touchmove", () => { moved = true; cancelPress(); });
+    map.on("mouseup", cancelPress);
+    map.on("touchend", cancelPress);
+    map.on("dragstart", cancelPress);
+
     return () => {
+      cancelPress();
       Object.values(markersRef.current).forEach((m) => m.remove());
       markersRef.current = {};
+      destMarkerRef.current?.remove();
+      destMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  // Sync markers
+  // Sync member markers
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -72,7 +131,6 @@ export function LiveMap({ token, members, selfDeviceId, followSelf, onMapReady }
       el.style.opacity = m.is_driving ? "1" : "0.45";
     });
 
-    // Remove gone markers
     Object.keys(markersRef.current).forEach((id) => {
       if (!seen.has(id)) {
         markersRef.current[id].remove();
@@ -80,7 +138,6 @@ export function LiveMap({ token, members, selfDeviceId, followSelf, onMapReady }
       }
     });
 
-    // Follow self
     if (followSelf) {
       const me = members.find((m) => m.device_id === selfDeviceId);
       if (me?.lat != null && me?.lng != null) {
@@ -88,6 +145,92 @@ export function LiveMap({ token, members, selfDeviceId, followSelf, onMapReady }
       }
     }
   }, [members, followSelf, selfDeviceId]);
+
+  // Destination marker
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!destination) {
+      destMarkerRef.current?.remove();
+      destMarkerRef.current = null;
+      return;
+    }
+    if (!destMarkerRef.current) {
+      const el = document.createElement("div");
+      el.className = "dest-pin";
+      el.innerHTML = `
+        <div class="dest-pin-flag">📍</div>
+        <div class="dest-pin-label" data-label></div>
+      `;
+      destMarkerRef.current = new mapboxgl.Marker({ element: el, anchor: "bottom" })
+        .setLngLat([destination.lng, destination.lat])
+        .addTo(map);
+    } else {
+      destMarkerRef.current.setLngLat([destination.lng, destination.lat]);
+    }
+    const labelEl = destMarkerRef.current.getElement().querySelector("[data-label]");
+    if (labelEl) labelEl.textContent = destination.label ?? "Destinație";
+  }, [destination]);
+
+  // Fetch + draw routes from each driving member to destination
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    let cancelled = false;
+
+    const updateRoutes = async () => {
+      const source = map.getSource("routes") as mapboxgl.GeoJSONSource | undefined;
+      if (!source) return;
+      if (!destination) {
+        source.setData({ type: "FeatureCollection", features: [] });
+        return;
+      }
+
+      const drivers = members.filter(
+        (m) => m.is_driving && m.lat != null && m.lng != null
+      );
+
+      const features = await Promise.all(
+        drivers.map(async (m) => {
+          try {
+            const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${m.lng},${m.lat};${destination.lng},${destination.lat}?geometries=geojson&overview=full&access_token=${token}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            const route = data.routes?.[0];
+            if (!route) return null;
+            return {
+              type: "Feature" as const,
+              properties: { color: m.color },
+              geometry: route.geometry,
+            };
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      if (cancelled) return;
+      source.setData({
+        type: "FeatureCollection",
+        features: features.filter(Boolean) as any,
+      });
+    };
+
+    if (map.isStyleLoaded()) updateRoutes();
+    else map.once("load", updateRoutes);
+
+    return () => { cancelled = true; };
+    // Re-fetch when destination changes or driver positions change meaningfully (every ~10s via members updates)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    destination?.lat,
+    destination?.lng,
+    // Include a coarse signature of driver positions to avoid spamming Directions API
+    members
+      .filter((m) => m.is_driving)
+      .map((m) => `${m.id}:${m.lat?.toFixed(3)}:${m.lng?.toFixed(3)}`)
+      .join("|"),
+  ]);
 
   return <div ref={containerRef} className="absolute inset-0" />;
 }
