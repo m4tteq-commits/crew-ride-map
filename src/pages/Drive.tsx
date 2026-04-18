@@ -285,17 +285,26 @@ export default function Drive() {
       {/* Bottom card */}
       <div className="absolute inset-x-0 bottom-0 safe-bottom">
         <Card className="mx-3 mb-3 bg-card/95 p-4 shadow-card backdrop-blur">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Membri</p>
-              <p className="text-base font-semibold">{members.length} în cameră · {others.filter(o => o.is_driving).length + (isDriving ? 1 : 0)} conduc</p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <button
+                onClick={copyCode}
+                className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-2.5 py-1 text-xs font-mono font-semibold hover:bg-secondary"
+                aria-label="Copiază codul camerei"
+              >
+                {code}
+                <Copy className="h-3 w-3 opacity-60" />
+              </button>
+              <p className="truncate text-sm font-semibold">
+                {members.length} în cameră · {others.filter(o => o.is_driving).length + (isDriving ? 1 : 0)} conduc
+              </p>
             </div>
             {isDriving ? (
-              <Button onClick={stopDrive} variant="destructive" size="lg" className="rounded-full">
+              <Button onClick={stopDrive} variant="destructive" size="lg" className="shrink-0 rounded-full">
                 <Square className="h-4 w-4" /> Stop
               </Button>
             ) : (
-              <Button onClick={startDrive} size="lg" className="rounded-full bg-gradient-primary shadow-glow">
+              <Button onClick={startDrive} size="lg" className="shrink-0 rounded-full bg-gradient-primary shadow-glow">
                 <Play className="h-4 w-4" /> Start drive
               </Button>
             )}
