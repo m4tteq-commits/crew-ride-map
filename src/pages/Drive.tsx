@@ -273,6 +273,15 @@ export default function Drive() {
             <Button size="icon" variant="secondary" onClick={fitAll} className="rounded-full shadow-card">
               <Users className="h-4 w-4" />
             </Button>
+            <Button
+              size="icon"
+              variant={destination ? "default" : "secondary"}
+              onClick={() => setDestDialogOpen(true)}
+              className="rounded-full shadow-card"
+              aria-label="Setează destinația"
+            >
+              <Flag className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </div>
@@ -303,30 +312,58 @@ export default function Drive() {
             )}
           </div>
 
+          {destination && (
+            <button
+              onClick={() => setDestDialogOpen(true)}
+              className="mb-3 flex w-full items-center gap-2 rounded-lg bg-primary/15 px-3 py-2 text-left text-sm"
+            >
+              <MapPin className="h-4 w-4 shrink-0 text-primary" />
+              <span className="truncate">
+                <span className="font-semibold">Destinație:</span>{" "}
+                <span className="text-muted-foreground">{destination.label ?? "Punct ales"}</span>
+              </span>
+            </button>
+          )}
+
           <div className="max-h-32 space-y-2 overflow-y-auto">
             {sortedMembers.length === 0 && (
               <p className="text-center text-sm text-muted-foreground">Niciun membru încă</p>
             )}
-            {sortedMembers.map((m) => (
-              <div key={m.id} className="flex items-center justify-between gap-3 rounded-lg bg-secondary/40 px-3 py-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span
-                    className="h-3 w-3 shrink-0 rounded-full"
-                    style={{
-                      backgroundColor: m.color,
-                      opacity: m.is_driving ? 1 : 0.4,
-                    }}
-                  />
-                  <span className="truncate text-sm font-medium">
-                    {m.nickname}{m.device_id === deviceId ? " (tu)" : ""}
-                  </span>
+            {sortedMembers.map((m) => {
+              const dist = distanceToDest(m);
+              return (
+                <div key={m.id} className="flex items-center justify-between gap-3 rounded-lg bg-secondary/40 px-3 py-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="h-3 w-3 shrink-0 rounded-full"
+                      style={{ backgroundColor: m.color, opacity: m.is_driving ? 1 : 0.4 }}
+                    />
+                    <span className="truncate text-sm font-medium">
+                      {m.nickname}{m.device_id === deviceId ? " (tu)" : ""}
+                    </span>
+                    {dist != null && (
+                      <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                        {formatDistance(dist)}
+                      </span>
+                    )}
+                  </div>
+                  <SpeedBadge kmh={m.speed_kmh ?? 0} size="sm" />
                 </div>
-                <SpeedBadge kmh={m.speed_kmh ?? 0} size="sm" />
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       </div>
+
+      <DestinationDialog
+        open={destDialogOpen}
+        onOpenChange={setDestDialogOpen}
+        token={token}
+        proximity={me?.lat != null && me?.lng != null ? { lat: me.lat, lng: me.lng } : null}
+        currentLabel={destination?.label}
+        onPick={(lat, lng, label) => setDestination(lat, lng, label)}
+        onClear={clearDestination}
+      />
     </div>
   );
 }
