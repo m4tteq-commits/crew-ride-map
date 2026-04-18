@@ -9,6 +9,12 @@ interface Destination {
   label?: string | null;
 }
 
+export interface RouteInfo {
+  memberId: string;
+  distanceM: number;
+  durationS: number;
+}
+
 interface Props {
   token: string;
   members: Member[];
@@ -17,9 +23,12 @@ interface Props {
   destination?: Destination | null;
   onMapReady?: (map: mapboxgl.Map) => void;
   onLongPress?: (lat: number, lng: number) => void;
+  onRoutesUpdate?: (routes: RouteInfo[]) => void;
 }
 
-export function LiveMap({ token, members, selfDeviceId, followSelf, destination, onMapReady, onLongPress }: Props) {
+export function LiveMap({ token, members, selfDeviceId, followSelf, destination, onMapReady, onLongPress, onRoutesUpdate }: Props) {
+  const onRoutesUpdateRef = useRef(onRoutesUpdate);
+  onRoutesUpdateRef.current = onRoutesUpdate;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Record<string, mapboxgl.Marker>>({});
@@ -183,6 +192,7 @@ export function LiveMap({ token, members, selfDeviceId, followSelf, destination,
       if (!source) return;
       if (!destination) {
         source.setData({ type: "FeatureCollection", features: [] });
+        onRoutesUpdateRef.current?.([]);
         return;
       }
 
@@ -190,7 +200,7 @@ export function LiveMap({ token, members, selfDeviceId, followSelf, destination,
         (m) => m.is_driving && m.lat != null && m.lng != null
       );
 
-      const features = await Promise.all(
+      const results = await Promise.all(
         drivers.map(async (m) => {
           try {
             const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${m.lng},${m.lat};${destination.lng},${destination.lat}?geometries=geojson&overview=full&access_token=${token}`;
@@ -199,9 +209,16 @@ export function LiveMap({ token, members, selfDeviceId, followSelf, destination,
             const route = data.routes?.[0];
             if (!route) return null;
             return {
-              type: "Feature" as const,
-              properties: { color: m.color },
-              geometry: route.geometry,
+              feature: {
+                type: "Feature" as const,
+                properties: { color: m.color },
+                geometry: route.geometry,
+              },
+              info: {
+                memberId: m.id,
+                distanceM: route.distance as number,
+                durationS: route.duration as number,
+              } as RouteInfo,
             };
           } catch {
             return null;
@@ -210,10 +227,12 @@ export function LiveMap({ token, members, selfDeviceId, followSelf, destination,
       );
 
       if (cancelled) return;
+      const valid = results.filter(Boolean) as { feature: any; info: RouteInfo }[];
       source.setData({
         type: "FeatureCollection",
-        features: features.filter(Boolean) as any,
+        features: valid.map((r) => r.feature),
       });
+      onRoutesUpdateRef.current?.(valid.map((r) => r.info));
     };
 
     if (map.isStyleLoaded()) updateRoutes();

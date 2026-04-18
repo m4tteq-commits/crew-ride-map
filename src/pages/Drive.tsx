@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, Crosshair, Users, Play, Square, Copy, MapPin, Flag } from "lucide-react";
 import { toast } from "sonner";
-import { haversineMeters, formatDistance } from "@/lib/geo";
+import { haversineMeters, formatDistance, formatEta } from "@/lib/geo";
+import type { RouteInfo } from "@/components/LiveMap";
 import mapboxgl from "mapbox-gl";
 
 export default function Drive() {
@@ -28,6 +29,7 @@ export default function Drive() {
   const [isDriving, setIsDriving] = useState(false);
   const [followSelf, setFollowSelf] = useState(true);
   const [destDialogOpen, setDestDialogOpen] = useState(false);
+  const [routes, setRoutes] = useState<RouteInfo[]>([]);
   const mapRef = useRef<mapboxgl.Map | null>(null);
 
   const room = useRoom(roomId);
@@ -251,21 +253,15 @@ export default function Drive() {
         destination={destination}
         onMapReady={(m) => { mapRef.current = m; }}
         onLongPress={handleLongPress}
+        onRoutesUpdate={setRoutes}
       />
 
       {/* Top bar */}
       <div className="pointer-events-none absolute inset-x-0 top-0 safe-top">
-        <div className="pointer-events-auto flex items-center justify-between gap-2 p-3">
+        <div className="pointer-events-auto flex items-start justify-between gap-2 p-3">
           <Button size="icon" variant="secondary" onClick={() => navigate("/rooms")} className="rounded-full shadow-card">
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <button
-            onClick={copyCode}
-            className="flex items-center gap-2 rounded-full bg-card/90 px-4 py-2 text-sm font-semibold shadow-card backdrop-blur"
-          >
-            <span className="font-mono">{code}</span>
-            <Copy className="h-3.5 w-3.5 opacity-60" />
-          </button>
           <div className="flex flex-col gap-2">
             <Button size="icon" variant="secondary" onClick={centerSelf} className="rounded-full shadow-card">
               <Crosshair className="h-4 w-4" />
@@ -286,27 +282,29 @@ export default function Drive() {
         </div>
       </div>
 
-      {/* Self speed (huge) */}
-      {isDriving && (
-        <div className="pointer-events-none absolute left-1/2 top-20 -translate-x-1/2 rounded-2xl bg-card/90 px-6 py-3 shadow-card backdrop-blur">
-          <SpeedBadge kmh={me?.speed_kmh ?? 0} size="xl" />
-        </div>
-      )}
-
       {/* Bottom card */}
       <div className="absolute inset-x-0 bottom-0 safe-bottom">
         <Card className="mx-3 mb-3 bg-card/95 p-4 shadow-card backdrop-blur">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Membri</p>
-              <p className="text-base font-semibold">{members.length} în cameră · {others.filter(o => o.is_driving).length + (isDriving ? 1 : 0)} conduc</p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <button
+                onClick={copyCode}
+                className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-2.5 py-1 text-xs font-mono font-semibold hover:bg-secondary"
+                aria-label="Copiază codul camerei"
+              >
+                {code}
+                <Copy className="h-3 w-3 opacity-60" />
+              </button>
+              <p className="truncate text-sm font-semibold">
+                {members.length} în cameră · {others.filter(o => o.is_driving).length + (isDriving ? 1 : 0)} conduc
+              </p>
             </div>
             {isDriving ? (
-              <Button onClick={stopDrive} variant="destructive" size="lg" className="rounded-full">
+              <Button onClick={stopDrive} variant="destructive" size="lg" className="shrink-0 rounded-full">
                 <Square className="h-4 w-4" /> Stop
               </Button>
             ) : (
-              <Button onClick={startDrive} size="lg" className="rounded-full bg-gradient-primary shadow-glow">
+              <Button onClick={startDrive} size="lg" className="shrink-0 rounded-full bg-gradient-primary shadow-glow">
                 <Play className="h-4 w-4" /> Start drive
               </Button>
             )}
@@ -330,10 +328,12 @@ export default function Drive() {
               <p className="text-center text-sm text-muted-foreground">Niciun membru încă</p>
             )}
             {sortedMembers.map((m) => {
-              const dist = distanceToDest(m);
+              const route = routes.find((r) => r.memberId === m.id);
+              const dist = route ? route.distanceM : distanceToDest(m);
+              const eta = route?.durationS;
               return (
                 <div key={m.id} className="flex items-center justify-between gap-3 rounded-lg bg-secondary/40 px-3 py-2">
-                  <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
                     <span
                       className="h-3 w-3 shrink-0 rounded-full"
                       style={{ backgroundColor: m.color, opacity: m.is_driving ? 1 : 0.4 }}
@@ -344,6 +344,11 @@ export default function Drive() {
                     {dist != null && (
                       <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
                         {formatDistance(dist)}
+                      </span>
+                    )}
+                    {eta != null && (
+                      <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-accent-foreground">
+                        ETA {formatEta(eta)}
                       </span>
                     )}
                   </div>
