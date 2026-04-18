@@ -4,14 +4,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId, getMapboxToken, getProfile } from "@/lib/device";
 import { useGeolocation, GeoSample } from "@/hooks/useGeolocation";
 import { useRoomMembers } from "@/hooks/useRoomMembers";
+import { useRoom } from "@/hooks/useRoom";
 import { LiveMap } from "@/components/LiveMap";
 import { MapboxTokenPrompt } from "@/components/MapboxTokenPrompt";
 import { SpeedBadge } from "@/components/SpeedBadge";
+import { DestinationDialog } from "@/components/DestinationDialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Crosshair, Users, Play, Square, Copy } from "lucide-react";
+import { ArrowLeft, Crosshair, Users, Play, Square, Copy, MapPin, Flag } from "lucide-react";
 import { toast } from "sonner";
-import { haversineMeters } from "@/lib/geo";
+import { haversineMeters, formatDistance } from "@/lib/geo";
 import mapboxgl from "mapbox-gl";
 
 export default function Drive() {
